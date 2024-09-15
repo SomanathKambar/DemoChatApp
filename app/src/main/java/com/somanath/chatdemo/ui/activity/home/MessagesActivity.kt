@@ -6,57 +6,49 @@ import android.os.Bundle
 import android.util.Log
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
-import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
-import androidx.compose.foundation.layout.wrapContentSize
-import androidx.compose.foundation.layout.wrapContentWidth
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.ripple.rememberRipple
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.somanath.chatdemo.ChatApp
 import com.somanath.chatdemo.R
 import com.somanath.chatdemo.ui.base.BaseConnectedActivity
 import dagger.hilt.android.AndroidEntryPoint
-import io.getstream.chat.android.compose.state.mediagallerypreview.MediaGalleryPreviewResultType
 import io.getstream.chat.android.compose.state.messages.attachments.StatefulStreamMediaRecorder
-import io.getstream.chat.android.compose.ui.components.composer.MessageInput
+import io.getstream.chat.android.compose.ui.components.BackButton
+import io.getstream.chat.android.compose.ui.components.NetworkLoadingIndicator
+import io.getstream.chat.android.compose.ui.components.TypingIndicator
+import io.getstream.chat.android.compose.ui.components.avatar.ChannelAvatar
 import io.getstream.chat.android.compose.ui.components.messageoptions.MessageOptionItemVisibility
-import io.getstream.chat.android.compose.ui.components.messageoptions.defaultMessageOptionsState
-import io.getstream.chat.android.compose.ui.components.reactionpicker.ReactionsPicker
-import io.getstream.chat.android.compose.ui.components.selectedmessage.SelectedMessageMenu
-import io.getstream.chat.android.compose.ui.components.selectedmessage.SelectedReactionsMenu
 import io.getstream.chat.android.compose.ui.messages.MessagesScreen
-import io.getstream.chat.android.compose.ui.messages.attachments.AttachmentsPicker
-import io.getstream.chat.android.compose.ui.messages.attachments.factory.AttachmentPickerPollCreation
-import io.getstream.chat.android.compose.ui.messages.composer.MessageComposer
-import io.getstream.chat.android.compose.ui.messages.list.MessageList
+import io.getstream.chat.android.compose.ui.messages.header.MessageListHeader
 import io.getstream.chat.android.compose.ui.theme.AttachmentPickerTheme
 import io.getstream.chat.android.compose.ui.theme.ChatTheme
 import io.getstream.chat.android.compose.ui.theme.MessageComposerTheme
@@ -64,22 +56,19 @@ import io.getstream.chat.android.compose.ui.theme.MessageOptionsTheme
 import io.getstream.chat.android.compose.ui.theme.ReactionOptionsTheme
 import io.getstream.chat.android.compose.ui.theme.StreamColors
 import io.getstream.chat.android.compose.ui.theme.StreamTypography
-import io.getstream.chat.android.compose.ui.util.rememberMessageListState
+import io.getstream.chat.android.compose.ui.util.getMembersStatusText
+import io.getstream.chat.android.compose.ui.util.mirrorRtl
 import io.getstream.chat.android.compose.viewmodel.messages.AttachmentsPickerViewModel
 import io.getstream.chat.android.compose.viewmodel.messages.MessageComposerViewModel
 import io.getstream.chat.android.compose.viewmodel.messages.MessageListViewModel
 import io.getstream.chat.android.compose.viewmodel.messages.MessagesViewModelFactory
-import io.getstream.chat.android.models.PollConfig
-import io.getstream.chat.android.models.ReactionSortingByFirstReactionAt
+import io.getstream.chat.android.models.Channel
+import io.getstream.chat.android.models.ConnectionState
 import io.getstream.chat.android.models.ReactionSortingByLastReactionAt
-import io.getstream.chat.android.models.VotingVisibility
+import io.getstream.chat.android.models.User
 import io.getstream.chat.android.ui.common.helper.DateFormatter
 import io.getstream.chat.android.ui.common.state.messages.MessageMode
-import io.getstream.chat.android.ui.common.state.messages.Reply
 import io.getstream.chat.android.ui.common.state.messages.list.DeletedMessageVisibility
-import io.getstream.chat.android.ui.common.state.messages.list.SelectedMessageOptionsState
-import io.getstream.chat.android.ui.common.state.messages.list.SelectedMessageReactionsPickerState
-import io.getstream.chat.android.ui.common.state.messages.list.SelectedMessageReactionsState
 import io.getstream.sdk.chat.audio.recording.DefaultStreamMediaRecorder
 import io.getstream.sdk.chat.audio.recording.MediaRecorderState
 import io.getstream.sdk.chat.audio.recording.StreamMediaRecorder
@@ -115,7 +104,7 @@ class MessagesActivity : BaseConnectedActivity() {
         super.onCreate(savedInstanceState)
 
         setContent {
-            val colors = if (isSystemInDarkTheme()) StreamColors.defaultDarkColors() else StreamColors.defaultColors()
+            val colors = StreamColors.defaultDarkColors()
             val typography = StreamTypography.defaultTypography()
             ChatTheme(
                 isInDarkMode = true,
@@ -144,20 +133,24 @@ class MessagesActivity : BaseConnectedActivity() {
                     optionVisibility = MessageOptionItemVisibility(),
                 ),
             ) {
-                MessagesScreen(
-                    viewModelFactory = factory,
-                    reactionSorting = ReactionSortingByLastReactionAt,
-                    onBackPressed = { finish() },
-                    onHeaderTitleClick = {},
-                    onUserAvatarClick = { user ->
-                        Log.i("MessagesActivity", "user avatar clicked: ${user.id}")
-                    },
-                    // TODO
-                    // statefulStreamMediaRecorder = statefulStreamMediaRecorder
-                )
+                Box(modifier = Modifier.fillMaxWidth().background(ChatTheme.colors.appBackground)){
+                    MessagesScreen(
+                        viewModelFactory = factory,
+                        reactionSorting = ReactionSortingByLastReactionAt,
+                        onBackPressed = { finish() },
+                        onHeaderTitleClick = {},
+                        onUserAvatarClick = { user ->
+                            Log.i("MessagesActivity", "user avatar clicked: ${user.id}")
+                        },
+                        topBarContent = {
+                            CustomTopBarContent(viewModelFactory = factory)
+                        }
+                        // TODO
+                        // statefulStreamMediaRecorder = statefulStreamMediaRecorder
+                    )
+                }
+                }
 
-//                MyCustomUi()
-            }
         }
     }
 
@@ -176,237 +169,169 @@ class MessagesActivity : BaseConnectedActivity() {
     }
 
     @Composable
-    fun MyCustomUi() {
-        val isShowingAttachments = attachmentsPickerViewModel.isShowingAttachments
-        val selectedMessageState = listViewModel.currentMessagesState.selectedMessageState
+    fun CustomTopBarContent(viewModelFactory: MessagesViewModelFactory) {
+        val listViewModel = viewModel(MessageListViewModel::class.java, factory = viewModelFactory)
+
+        val connectionState by listViewModel.connectionState.collectAsState()
         val user by listViewModel.user.collectAsState()
-        val lazyListState = rememberMessageListState()
-
-        Box(modifier = Modifier.fillMaxSize()) {
-            Scaffold(
-                modifier = Modifier.fillMaxSize(),
-                bottomBar = {
-                    MyCustomComposer()
-                },
+        val messageMode = listViewModel.messageMode
+        Column(modifier = Modifier.background(ChatTheme.colors.appBackground).padding(4.dp)) {
+            Row(
+                modifier = Modifier.padding(top = 15.dp)
+                    .background(ChatTheme.colors.appBackground)
+                    .fillMaxWidth()
+                    .padding(8.dp),
             ) {
-                MessageList(
+                val layoutDirection = LocalLayoutDirection.current
+
+                BackButton(
+                    modifier = Modifier.mirrorRtl(layoutDirection = layoutDirection),
+                    painter = painterResource(id = R.drawable.ic_chevron_left),
+                    onBackPressed = {
+                        finish()
+                    },
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                ChannelAvatar(
                     modifier = Modifier
-                        .padding(it)
-                        .background(ChatTheme.colors.appBackground)
-                        .fillMaxSize(),
-                    viewModel = listViewModel,
-                    reactionSorting = ReactionSortingByFirstReactionAt,
-                    messagesLazyListState = if (listViewModel.isInThread) rememberMessageListState() else lazyListState,
-                    onThreadClick = { message ->
-                        composerViewModel.setMessageMode(MessageMode.MessageThread(message))
-                        listViewModel.openMessageThread(message)
-                    },
-                    onMediaGalleryPreviewResult = { result ->
-                        when (result?.resultType) {
-                            MediaGalleryPreviewResultType.QUOTE -> {
-                                val message = listViewModel.getMessageById(result.messageId)
+                        .size(40.dp)
+                        .align(Alignment.CenterVertically),
+                    channel = listViewModel.channel,
+                    currentUser = user,
+                    contentDescription = listViewModel.channel.name,
+                    onClick = {
 
-                                if (message != null) {
-                                    composerViewModel.performMessageAction(Reply(message))
-                                }
-                            }
-
-                            MediaGalleryPreviewResultType.SHOW_IN_CHAT -> {
-                            }
-
-                            null -> Unit
-                        }
                     },
                 )
+                Spacer(
+                    Modifier
+                        .width(10.dp)
+                        .align(Alignment.CenterVertically))
+                DefaultMessageListHeaderCenterContent(channel = listViewModel.channel, currentUser = user, connectionState, messageMode = messageMode, modifier = Modifier.align(Alignment.CenterVertically))
+                Spacer(Modifier.weight(1f))
+                Image(painter = painterResource(id = R.drawable.ic_more_horiz_24), contentDescription = "", modifier = Modifier.align(Alignment.CenterVertically).padding(end = 20.dp))
             }
+            Spacer(
+                modifier = Modifier.padding(top = 15.dp, start = 20.dp, end = 20.dp)
+                    .fillMaxWidth()
+                    .height(0.5.dp)
+                    .background(color = ChatTheme.colors.textLowEmphasis),
+            )
+        }
 
-            if (isShowingAttachments) {
-                var isFullScreenContent by rememberSaveable { mutableStateOf(false) }
-                val screenHeight = LocalConfiguration.current.screenHeightDp
-                val pickerHeight by animateDpAsState(
-                    targetValue = if (isFullScreenContent) screenHeight.dp else ChatTheme.dimens.attachmentsPickerHeight,
-                    label = "full sized picker animation",
-                )
+    }    
+    
+    @Composable
+   fun DefaultMessageListHeaderCenterContent(
+    channel: Channel,
+    currentUser: User?,
+    connectionState: ConnectionState,
+    modifier: Modifier = Modifier,
+    typingUsers: List<User> = emptyList(),
+    messageMode: MessageMode = MessageMode.Normal,
+    onHeaderTitleClick: (Channel) -> Unit = {},
+    ) {
+        val title = when (messageMode) {
+            MessageMode.Normal -> ChatTheme.channelNameFormatter.formatChannelName(channel, currentUser)
+            is MessageMode.MessageThread -> stringResource(id = io.getstream.chat.android.compose.R.string.stream_compose_thread_title)
+        }
 
-                AttachmentsPicker(
-                    attachmentsPickerViewModel = attachmentsPickerViewModel,
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .height(pickerHeight),
-                    shape = if (isFullScreenContent) {
-                        RoundedCornerShape(0.dp)
-                    } else {
-                        ChatTheme.shapes.bottomSheet
-                    },
-                    onAttachmentsSelected = { attachments ->
-                        attachmentsPickerViewModel.changeAttachmentState(false)
-                        composerViewModel.addSelectedAttachments(attachments)
-                    },
-                    onTabClick = { _, tab -> isFullScreenContent = tab.isFullContent },
-                    onAttachmentPickerAction = { action ->
-                        if (action is AttachmentPickerPollCreation) {
-                            composerViewModel.createPoll(
-                                pollConfig = PollConfig(
-                                    name = action.question,
-                                    options = action.options.filter { it.title.isNotEmpty() }.map { it.title },
-                                    description = action.question,
-                                    allowUserSuggestedOptions = action.switches.any { it.key == "allowUserSuggestedOptions" && it.enabled },
-                                    votingVisibility = if (action.switches.any { it.key == "votingVisibility" && it.enabled }) {
-                                        VotingVisibility.ANONYMOUS
-                                    } else {
-                                        VotingVisibility.PUBLIC
-                                    },
-                                    maxVotesAllowed = if (action.switches.any { it.key == "maxVotesAllowed" && it.enabled }) {
-                                        action.switches.first { it.key == "maxVotesAllowed" }.pollSwitchInput?.value.toString()
-                                            .toInt()
-                                    } else {
-                                        1
-                                    },
-                                ),
-                            )
-                        }
-                    },
-                    onDismiss = {
-                        attachmentsPickerViewModel.changeAttachmentState(false)
-                        attachmentsPickerViewModel.dismissAttachments()
-                    },
-                )
-            }
+        val subtitle = when (messageMode) {
+            MessageMode.Normal -> channel.getMembersStatusText(LocalContext.current, currentUser)
+            is MessageMode.MessageThread -> stringResource(
+                io.getstream.chat.android.compose.R.string.stream_compose_thread_subtitle,
+                ChatTheme.channelNameFormatter.formatChannelName(channel, currentUser),
+            )
+        }
 
-            if (selectedMessageState != null) {
-                val selectedMessage = selectedMessageState.message
-                when (selectedMessageState) {
-                    is SelectedMessageOptionsState -> {
-                        SelectedMessageMenu(
-                            modifier = Modifier
-                                .align(Alignment.Center)
-                                .padding(horizontal = 20.dp)
-                                .wrapContentSize(),
-                            shape = ChatTheme.shapes.attachment,
-                            messageOptions = defaultMessageOptionsState(
-                                selectedMessage = selectedMessage,
-                                currentUser = user,
-                                isInThread = listViewModel.isInThread,
-                                ownCapabilities = selectedMessageState.ownCapabilities,
-                            ),
-                            message = selectedMessage,
-                            ownCapabilities = selectedMessageState.ownCapabilities,
-                            onMessageAction = { action ->
-                                composerViewModel.performMessageAction(action)
-                                listViewModel.performMessageAction(action)
-                            },
-                            onShowMoreReactionsSelected = {
-                                listViewModel.selectExtendedReactions(selectedMessage)
-                            },
-                            onDismiss = { listViewModel.removeOverlay() },
-                        )
-                    }
+        Column(
+            modifier = modifier
+                .height(IntrinsicSize.Max)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = { onHeaderTitleClick(channel) },
+                ),
 
-                    is SelectedMessageReactionsState -> {
-                        SelectedReactionsMenu(
-                            modifier = Modifier
-                                .align(Alignment.Center)
-                                .padding(horizontal = 20.dp)
-                                .wrapContentSize(),
-                            shape = ChatTheme.shapes.attachment,
-                            message = selectedMessage,
-                            currentUser = user,
-                            onMessageAction = { action ->
-                                composerViewModel.performMessageAction(action)
-                                listViewModel.performMessageAction(action)
-                            },
-                            onShowMoreReactionsSelected = {
-                                listViewModel.selectExtendedReactions(selectedMessage)
-                            },
-                            onDismiss = { listViewModel.removeOverlay() },
-                            ownCapabilities = selectedMessageState.ownCapabilities,
-                        )
-                    }
+        ) {
+            Text(
+                text = title,
+                style = ChatTheme.typography.title3Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                color = ChatTheme.colors.textHighEmphasis,
+            )
 
-                    is SelectedMessageReactionsPickerState -> {
-                        ReactionsPicker(
-                            modifier = Modifier
-                                .align(Alignment.Center)
-                                .padding(horizontal = 20.dp)
-                                .wrapContentSize(),
-                            shape = ChatTheme.shapes.attachment,
-                            message = selectedMessage,
-                            onMessageAction = { action ->
-                                composerViewModel.performMessageAction(action)
-                                listViewModel.performMessageAction(action)
-                            },
-                            onDismiss = { listViewModel.removeOverlay() },
-                        )
-                    }
-
-                    else -> Unit
+            when (connectionState) {
+                is ConnectionState.Connected -> {
+                    DefaultMessageListHeaderSubtitle(
+                        subtitle = subtitle,
+                        typingUsers = typingUsers,
+                    )
+                }
+                is ConnectionState.Connecting -> {
+                    NetworkLoadingIndicator(
+                        modifier = Modifier.wrapContentHeight(),
+                        spinnerSize = 12.dp,
+                        textColor = ChatTheme.colors.textLowEmphasis,
+                        textStyle = ChatTheme.typography.footnote,
+                    )
+                }
+                is ConnectionState.Offline -> {
+                    Text(
+                        text = stringResource(id = io.getstream.chat.android.compose.R.string.stream_compose_disconnected),
+                        color = ChatTheme.colors.textLowEmphasis,
+                        style = ChatTheme.typography.footnote,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
             }
         }
-    }
 
-    @Composable
-    fun MyCustomComposer() {
-        MessageComposer(
-            modifier = Modifier
-                .fillMaxWidth()
-                .wrapContentHeight(),
-            viewModel = composerViewModel,
-            statefulStreamMediaRecorder = statefulStreamMediaRecorder,
-            integrations = {},
-            input = { inputState ->
-                MessageInput(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(7f)
-                        .padding(start = 8.dp),
-                    messageComposerState = inputState,
-                    onValueChange = { composerViewModel.setMessageInput(it) },
-                    onAttachmentRemoved = { composerViewModel.removeSelectedAttachment(it) },
-                    label = {
-                        Row(
-                            Modifier.wrapContentWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Icon(
-                                painter = painterResource(id = R.drawable.stream_compose_ic_gallery),
-                                contentDescription = null,
-                            )
 
-                            Text(
-                                modifier = Modifier.padding(start = 4.dp),
-                                text = "Type something",
-                                color = ChatTheme.colors.textLowEmphasis,
-                            )
-                        }
-                    },
-                    innerTrailingContent = {
-                        Icon(
-                            modifier = Modifier
-                                .size(24.dp)
-                                .clickable(
-                                    interactionSource = remember { MutableInteractionSource() },
-                                    indication = rememberRipple(),
-                                ) {
-                                    val state = composerViewModel.messageComposerState.value
+        @Composable
+        fun DefaultMessageListHeaderSubtitle(
+            subtitle: String,
+            typingUsers: List<User>,
+        ) {
+            val textColor = ChatTheme.colors.textLowEmphasis
+            val textStyle = ChatTheme.typography.footnote
 
-                                    composerViewModel.sendMessage(
-                                        composerViewModel.buildNewMessage(
-                                            state.inputValue,
-                                            state.attachments,
-                                        ),
-                                    )
-                                },
-                            painter = painterResource(id = R.drawable.stream_compose_ic_send),
-                            tint = ChatTheme.colors.primaryAccent,
-                            contentDescription = null,
-                        )
-                    },
+            if (typingUsers.isEmpty()) {
+                Text(
+                    text = subtitle,
+                    color = textColor,
+                    style = textStyle,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
-            },
-            trailingContent = { Spacer(modifier = Modifier.size(8.dp)) },
-        )
-    }
+            } else {
+                Row(
+                    modifier = Modifier,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    val typingUsersText = LocalContext.current.resources.getQuantityString(
+                        io.getstream.chat.android.compose.R.plurals.stream_compose_message_list_header_typing_users,
+                        typingUsers.size,
+                        typingUsers.first().name,
+                        typingUsers.size - 1,
+                    )
+
+                    TypingIndicator()
+
+                    Text(
+                        text = typingUsersText,
+                        color = textColor,
+                        style = textStyle,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        }
+   }
 
     companion object {
         private const val TAG = "MessagesActivity"
@@ -428,6 +353,47 @@ class MessagesActivity : BaseConnectedActivity() {
         }
     }
 
+    @Composable
+   fun DefaultMessageListHeaderSubtitle(
+    subtitle: String,
+    typingUsers: List<User>,
+    ) {
+        val textColor = ChatTheme.colors.textLowEmphasis
+        val textStyle = ChatTheme.typography.footnote
 
+        if (typingUsers.isEmpty()) {
+            Text(
+                text = subtitle,
+                color = textColor,
+                style = textStyle,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        } else {
+            Row(
+                modifier = Modifier,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                val typingUsersText = LocalContext.current.resources.getQuantityString(
+                    io.getstream.chat.android.compose.R.plurals.stream_compose_message_list_header_typing_users,
+                    typingUsers.size,
+                    typingUsers.first().name,
+                    typingUsers.size - 1,
+                )
 
+                TypingIndicator()
+
+                Text(
+                    text = typingUsersText,
+                    color = textColor,
+                    style = textStyle,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+
+        
 }
