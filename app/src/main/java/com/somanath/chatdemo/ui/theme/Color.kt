@@ -1,4 +1,4 @@
-package com.somanath.sacrenachatdemo.ui.theme
+package com.somanath.chatdemo.ui.theme
 
 import androidx.compose.ui.graphics.Color
 

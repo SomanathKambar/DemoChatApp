@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "993212205145",
+    "project_id": "samplechat-b61b7",
+    "storage_bucket": "samplechat-b61b7.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:993212205145:android:b088df14a7f23bcd34c948",
+        "android_client_info": {
+          "package_name": "com.somanath.chatdemo"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAptZ9MoK7bVYlZc1epZ1JZUmNH2KR9IOA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
